@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DNSGuard — Domain Intelligence for Multi-Tenant Microsoft Environments</title>
+  <meta name="description" content="Continuous DNS health, DMARC compliance, and domain intelligence. Part of the TenantFleet ecosystem.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent-1: #10b981;
+      --accent-2: #0d9488;
+      --accent-glow: rgba(16, 185, 129, 0.25);
+      --gradient-text: linear-gradient(135deg, #34d399, #14b8a6);
+      --orb-1: radial-gradient(circle, rgba(16,185,129,0.15), transparent 70%);
+      --orb-2: radial-gradient(circle, rgba(13,148,136,0.12), transparent 70%);
+      --bg: #030305;
+      --surface: rgba(255, 255, 255, 0.03);
+      --border: rgba(255, 255, 255, 0.06);
+      --text-primary: #f0f0f5;
+      --text-secondary: #a1a1aa;
+      --text-muted: #6b7280;
+      --glass-bg: rgba(3, 3, 5, 0.65);
+      --glass-border: rgba(255, 255, 255, 0.06);
+      --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Skip link */
+    .skip-link {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 9999;
+      padding: 0.75rem 1.25rem;
+      background: var(--accent-1);
+      color: #000;
+      font-weight: 700;
+      text-decoration: none;
+      border-radius: 0 0 0.5rem 0;
+      transform: translateY(-100%);
+      transition: transform 0.2s ease;
+    }
+    .skip-link:focus {
+      transform: translateY(0);
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+
+    /* Aurora orbs */
+    .aurora-container {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(60px);
+      will-change: transform;
+    }
+    .orb-1 {
+      width: 600px;
+      height: 600px;
+      background: var(--orb-1);
+      top: -10%;
+      left: -5%;
+      animation: drift-1 25s ease-in-out infinite alternate;
+    }
+    .orb-2 {
+      width: 500px;
+      height: 500px;
+      background: var(--orb-2);
+      top: 20%;
+      right: -10%;
+      animation: drift-2 30s ease-in-out infinite alternate;
+    }
+    .orb-3 {
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(52,211,153,0.08), transparent 70%);
+      bottom: 10%;
+      left: 30%;
+      animation: drift-3 22s ease-in-out infinite alternate;
+    }
+    @keyframes drift-1 {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(60px, 40px) scale(1.1); }
+    }
+    @keyframes drift-2 {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(-50px, 60px) scale(1.15); }
+    }
+    @keyframes drift-3 {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(40px, -30px) scale(1.05); }
+    }
+
+    /* Noise overlay */
+    .noise-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0.02;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      background-size: 200px 200px;
+    }
+
+    /* Focus styles */
+    *:focus-visible {
+      outline: 2px solid var(--accent-1);
+      outline-offset: 2px;
+    }
+    a, button {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* Navigation */
+    .site-nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .nav-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      gap: 1rem;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: var(--text-primary);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent-1);
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      transition: color 0.2s, background 0.2s;
+      display: flex;
+      align-items: center;
+    }
+    .nav-links a:hover {
+      color: var(--text-primary);
+      background: rgba(255,255,255,0.04);
+    }
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.5rem 1.25rem;
+      background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+      color: #000;
+      font-weight: 700;
+      font-size: 0.875rem;
+      text-decoration: none;
+      border-radius: 0.625rem;
+      border: none;
+      cursor: pointer;
+      transition: box-shadow 0.2s, transform 0.2s;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .nav-cta:hover {
+      box-shadow: 0 0 32px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+    @media (max-width: 640px) {
+      .nav-inner {
+        flex-wrap: wrap;
+        height: auto;
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+      }
+      .nav-links {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+      }
+    }
+
+    /* Main content wrapper */
+    main {
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 8rem 1.5rem 4rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent-1);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1.5rem;
+    }
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent-1);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+    .hero h1 {
+      font-size: clamp(3rem, 8vw, 6.5rem);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      background: var(--gradient-text);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 1.25rem;
+    }
+    .hero-subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.25rem);
+      color: var(--text-secondary);
+      max-width: 680px;
+      margin: 0 auto 2rem;
+      line-height: 1.6;
+    }
+    .hero-ctas {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 3.5rem;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.875rem 1.75rem;
+      background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+      color: #000;
+      font-weight: 700;
+      font-size: 0.9375rem;
+      text-decoration: none;
+      border-radius: 0.75rem;
+      border: none;
+      cursor: pointer;
+      transition: box-shadow 0.2s, transform 0.2s;
+      box-shadow: 0 0 24px var(--accent-glow);
+      min-height: 48px;
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 36px var(--accent-glow);
+      transform: translateY(-2px);
+    }
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.875rem 1.75rem;
+      background: var(--surface);
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 0.9375rem;
+      text-decoration: none;
+      border-radius: 0.75rem;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, transform 0.2s;
+      min-height: 48px;
+    }
+    .btn-ghost:hover {
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(255,255,255,0.12);
+      transform: translateY(-2px);
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 1rem;
+      padding: 1.5rem 1rem;
+      text-align: center;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+    }
+    .stat-value {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 800;
+      color: var(--accent-1);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+    .stat-label {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin-top: 0.375rem;
+      font-weight: 500;
+    }
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 480px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Features */
+    .features {
+      padding: 5rem 1.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .section-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+    .section-label {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent-1);
+      margin-bottom: 0.75rem;
+    }
+    .section-header h2 {
+      font-size: clamp(1.75rem, 5vw, 2.75rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--text-primary);
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+    }
+    .feature-card {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 1rem;
+      padding: 1.75rem;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      overflow: hidden;
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 1.75rem;
+      right: 1.75rem;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+      border-radius: 0 0 2px 2px;
+      opacity: 0.85;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+    .feature-card h3 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      margin-bottom: 0.625rem;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .feature-card p {
+      font-size: 0.9375rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    @media (max-width: 992px) {
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 640px) {
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Demo / Code */
+    .demo {
+      padding: 5rem 1.5rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .terminal {
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .terminal-dot.red { background: #ff5f56; }
+    .terminal-dot.yellow { background: #ffbd2e; }
+    .terminal-dot.green { background: #27c93f; }
+    .terminal-title {
+      margin-left: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .terminal-body {
+      padding: 1.25rem 1.5rem;
+      overflow-x: auto;
+    }
+    .terminal-body pre {
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      line-height: 1.7;
+      color: var(--text-primary);
+      white-space: pre;
+      tab-size: 4;
+    }
+    .token-keyword { color: #c084fc; }
+    .token-string { color: #86efac; }
+    .token-comment { color: #6b7280; }
+    .token-function { color: #93c5fd; }
+    .token-number { color: #fca5a5; }
+
+    /* CTA */
+    .cta {
+      padding: 6rem 1.5rem;
+      position: relative;
+      text-align: center;
+    }
+    .cta-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 400px;
+      background: radial-gradient(ellipse at center, rgba(16,185,129,0.12), transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .cta-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    .cta h2 {
+      font-size: clamp(1.75rem, 5vw, 2.75rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+    }
+    .cta p {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+      margin-bottom: 2rem;
+    }
+
+    /* Footer */
+    footer {
+      position: relative;
+      z-index: 2;
+      border-top: 1px solid var(--border);
+      padding: 2rem 1.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .footer-copy {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    .footer-links {
+      display: flex;
+      gap: 1.25rem;
+      list-style: none;
+      flex-wrap: wrap;
+    }
+    .footer-links a {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover {
+      color: var(--accent-1);
+    }
+    @media (max-width: 640px) {
+      footer {
+        flex-direction: column;
+        text-align: center;
+      }
+      .footer-links {
+        justify-content: center;
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .orb { animation: none; }
+      .stat-card:hover, .feature-card:hover {
+        transform: none;
+      }
+      .btn-primary:hover, .btn-ghost:hover, .nav-cta:hover {
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+
+  <div class="aurora-container" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+  <div class="noise-overlay" aria-hidden="true"></div>
+
+  <header class="site-nav" role="banner">
+    <nav class="nav-inner" aria-label="Primary">
+      <a href="#" class="nav-brand">
+        DNSGuard
+        <span class="brand-dot" aria-hidden="true"></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#demo">Demo</a></li>
+        <li><a href="#docs">Docs</a></li>
+      </ul>
+      <a href="#cta" class="nav-cta">Get Started</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-label="Hero">
+      <div class="badge">
+        <span class="badge-dot" aria-hidden="true"></span>
+        TenantFleet Ecosystem / Spirit
+      </div>
+      <h1>Your Domains. Your Reputation. Your Shield.</h1>
+      <p class="hero-subtitle">
+        Continuous DNS health, DMARC compliance, and domain intelligence for multi-tenant Microsoft environments. Guard your perimeter before the auditor asks.
+      </p>
+      <div class="hero-ctas">
+        <a href="#" class="btn-primary">Clone on GitHub</a>
+        <a href="#" class="btn-ghost">Read the Docs</a>
+      </div>
+
+      <div class="stats-grid" role="list" aria-label="Key statistics">
+        <div class="stat-card" role="listitem">
+          <div class="stat-value">5</div>
+          <div class="stat-label">Protocols Monitored</div>
+        </div>
+        <div class="stat-card" role="listitem">
+          <div class="stat-value">&lt; 0.1%</div>
+          <div class="stat-label">False Positive Rate</div>
+        </div>
+        <div class="stat-card" role="listitem">
+          <div class="stat-value">∞</div>
+          <div class="stat-label">Domain Scale</div>
+        </div>
+        <div class="stat-card" role="listitem">
+          <div class="stat-value">&lt; 60s</div>
+          <div class="stat-label">Alert Latency</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features" id="features" aria-labelledby="features-heading">
+      <div class="section-header">
+        <span class="section-label">What DNSGuard Delivers</span>
+        <h2 id="features-heading">Perimeter intelligence at scale</h2>
+      </div>
+      <div class="features-grid" role="list">
+        <article class="feature-card" role="listitem">
+          <h3>DMARC Monitoring</h3>
+          <p>Aggregate and forensic reports parsed daily with trend analysis and compliance scoring per domain.</p>
+        </article>
+        <article class="feature-card" role="listitem">
+          <h3>DNS Health</h3>
+          <p>Real-time checks for A, AAAA, MX, NS, TXT, and SOA records with propagation monitoring.</p>
+        </article>
+        <article class="feature-card" role="listitem">
+          <h3>Domain Expiry</h3>
+          <p>WHOIS and registrar monitoring with configurable alert thresholds before expiration.</p>
+        </article>
+        <article class="feature-card" role="listitem">
+          <h3>Email Security Scoring</h3>
+          <p>Composite score based on SPF, DKIM, DMARC, MTA-STS, and TLS-RPT posture.</p>
+        </article>
+        <article class="feature-card" role="listitem">
+          <h3>Threat Intelligence</h3>
+          <p>Correlation against known phishing infrastructure and suspicious registrar activity.</p>
+        </article>
+        <article class="feature-card" role="listitem">
+          <h3>PE Reporting</h3>
+          <p>Portfolio-level dashboards for private equity domain posture and compliance readiness.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="demo" id="demo" aria-labelledby="demo-heading">
+      <div class="section-header">
+        <span class="section-label">DNS Record Checker</span>
+        <h2 id="demo-heading" style="display:none;">DNS Record Checker</h2>
+      </div>
+      <div class="terminal" role="region" aria-label="Code example">
+        <div class="terminal-header">
+          <span class="terminal-dot red" aria-hidden="true"></span>
+          <span class="terminal-dot yellow" aria-hidden="true"></span>
+          <span class="terminal-dot green" aria-hidden="true"></span>
+          <span class="terminal-title">dnsguard_demo.py</span>
+        </div>
+        <div class="terminal-body">
+          <pre><code><span class="token-keyword">from</span> dnsguard <span class="token-keyword">import</span> DNSChecker, DMARCAnalyzer
+
+<span class="token-comment"># Initialize checker for your tenant</span>
+checker = <span class="token-function">DNSChecker</span>(tenant_id=<span class="token-string">"TENANT_ID"</span>)
+
+<span class="token-comment"># Audit all domains for a brand</span>
+report = checker.<span class="token-function">audit_brand_domains</span>(brand=<span class="token-string">"acme-corp"</span>)
+
+<span class="token-comment"># DMARC compliance check</span>
+dmarc = <span class="token-function">DMARCAnalyzer</span>(report.records)
+<span class="token-keyword">assert</span> dmarc.policy == <span class="token-string">"quarantine"</span>
+<span class="token-keyword">assert</span> dmarc.pct == <span class="token-number">100</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta" id="cta" aria-labelledby="cta-heading">
+      <div class="cta-glow" aria-hidden="true"></div>
+      <div class="cta-inner">
+        <h2 id="cta-heading">Guard your perimeter before the auditor asks.</h2>
+        <p>Deploy DNSGuard and get DMARC, DNS, and domain intelligence in under 5 minutes.</p>
+        <a href="#" class="btn-primary">Clone on GitHub</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p class="footer-copy">© 2026 DNSGuard — Part of the TenantFleet ecosystem</p>
+    <ul class="footer-links" aria-label="TenantFleet ecosystem links">
+      <li><a href="#">EntraGroups</a></li>
+      <li><a href="#">TenantForge</a></li>
+      <li><a href="#">RampGuard</a></li>
+      <li><a href="#">SharePointAgent</a></li>
+    </ul>
+  </footer>
+</body>
+</html>
